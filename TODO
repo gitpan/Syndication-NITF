@@ -11,6 +11,7 @@ TODO
     * Integration with Syndication::NewsML module
     * Finish off test suite (need more examples!)
     * More support code: nitf-table handlers, ID schema helpers, etc
+    * More useful example parser
     * The rest of the TODO list ;-)
   Would be nice
 

@@ -1,4 +1,4 @@
-$Id: TODO.pod,v 0.1 2001/11/01 06:13:02 brendan Exp $
+$Id: TODO.pod,v 0.2 2001/12/19 05:27:20 brendan Exp $
 
 =for html
 <div id="content">
@@ -37,6 +37,9 @@ Finish off test suite (need more examples!)
 
 =item *
 More support code: nitf-table handlers, ID schema helpers, etc
+
+=item *
+More useful example parser
 
 =item *
 The rest of the TODO list ;-)

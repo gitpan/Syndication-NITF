@@ -1,8 +1,8 @@
-# $Id: NITF.pm,v 0.1 2001/11/01 06:28:39 brendan Exp $
+# $Id: NITF.pm,v 0.2 2001/12/19 05:30:13 brendan Exp $
 # Syndication::NITF.pm
 
-$VERSION     = sprintf("%d.%02d", q$Revision: 0.1 $ =~ /(\d+)\.(\d+)/);
-$VERSION_DATE= sprintf("%s", q$Date: 2001/11/01 06:28:39 $ =~ m# (.*) $# );
+$VERSION     = sprintf("%d.%02d", q$Revision: 0.2 $ =~ /(\d+)\.(\d+)/);
+$VERSION_DATE= sprintf("%s", q$Date: 2001/12/19 05:30:13 $ =~ m# (.*) $# );
 
 $DEBUG = 0;
 
@@ -41,7 +41,7 @@ Syndication::NITF -- Parser for NITF v3.0 documents
 
 =head1 VERSION
 
-Version $Revision: 0.1 $, released $Date: 2001/11/01 06:28:39 $
+Version $Revision: 0.2 $, released $Date: 2001/12/19 05:30:13 $
 
 =head1 SYNOPSIS
 
@@ -308,6 +308,15 @@ sub getText {
 	$self->{text} = getTextRecursive($self->{node}, $stripwhitespace);
 }
 
+# special "cheat" method to get ALL text in ALL child elements, ignoring any markup tags.
+# can use on any element, anywhere (if there's no text, it will just return an empty string
+# or all whitespace)
+sub getAllText {
+	my ($self, $stripwhitespace) = @_;
+	$self->{text} = "";
+	$self->{text} = getTextRecursive($self->{node}, $stripwhitespace);
+}
+
 sub getTextRecursive {
 	my ($node, $stripwhitespace) = @_;
 	my $textstring;
@@ -315,14 +324,15 @@ sub getTextRecursive {
 		if ( $child->getNodeType == XML::DOM::ELEMENT_NODE ) {
 			$textstring .= getTextRecursive($child, $stripwhitespace);
 		} else {
-			$tmpstring = $child->getData();
-			if ($stripwhitespace && $stripwhitespace eq "strip") {
+			my $tmpstring = $child->getData();
+			if ($stripwhitespace && ($stripwhitespace eq "strip")) {
 				$tmpstring =~ s/^\s+/ /; #replace with single space -- is this ok?
 				$tmpstring =~ s/\s+$/ /; #replace with single space -- is this ok?
 			}
 			$textstring .= $tmpstring;
 		}
 	}
+	$textstring =~ s/\s+/ /g if $stripwhitespace; #replace with single space -- is this ok?
 	return $textstring;
 }
 
@@ -344,6 +354,21 @@ sub getParentPath {
 	# have to look two levels up because XML::DOM treats "#document" as a level in the tree
 	return $parent->getNodeName if !defined($parent->getParentNode->getParentNode);
 	return $self->getParentPath($parent->getParentNode) . "->" . $parent->getNodeName;
+}
+
+# attempt to return an array of all children, in order, as instantiated nodes
+sub getChildrenList {
+	my ($self) = @_;
+	my @childarray;
+	foreach my $child ($self->{node}->getChildNodes) {
+		if ($child->getNodeType == XML::DOM::ELEMENT_NODE) {
+			my $nodename = $child->getNodeName;
+			$nodename =~ s/[\-\.]//g; # remove dots and dashes from element names
+            my $elementObject = "Syndication::NITF::$nodename"->new($child);
+            push(@childarray, $elementObject);
+		}
+	}
+	return @childarray;
 }
 
 use vars '$AUTOLOAD';
@@ -405,7 +430,7 @@ sub AUTOLOAD {
             push(@elementObjects, $elementObject);
         }
         $self->{$elem} = \@elementObjects;
-        return $self->{$elem};
+        return wantarray ? @elementObjects : $self->{$elem};
 	} elsif ($self->{_singleElements}->{$realname}) {
 
 		# handle getXXX method for single-element tags
@@ -413,8 +438,11 @@ sub AUTOLOAD {
 		if (!$element && $self->{_singleElements}->{$realname} eq REQUIRED) {
 			croak "Error: required element $realname is missing";
 		} 
+		# BQ altered 2001-12-05 so a non-existing element returns undef rather than an empty node
 		$self->{$realname} = "Syndication::NITF::$oldname"->new($element->item(0));
-		return $self->{$realname};
+		return $element->item(0)
+			? $self->{$realname} = "Syndication::NITF::$oldname"->new($element->item(0))
+			: undef;
 	} elsif ($self->{_attributes}->{$realname}) {
 		# return undef if self->node doesn't exist
 		return undef unless defined($self->{node});
@@ -426,7 +454,7 @@ sub AUTOLOAD {
 		return $self->{$realname};
     } elsif ($self->{_multiElements}->{$realname}) {
         # flag error because multiElement needs to be called with "getBlahList"
-        croak "$call can be a multi-element field: must call get".$call."List";
+        croak "$call can occur more than once: must call get".$call."List";
 	} else {
 		croak "No such method: $AUTOLOAD";
 	}
@@ -573,8 +601,19 @@ use Carp;
 
 sub _init {
 	my ($self, $node) = @_;
-	$self->{_attributes}->{type} = IMPLIED; # controlled vocabulary: (main|subtitle|parttitle|alternate|abbrev|other)
 	$self->{_hasText} = 1;
+}
+
+# attribute is an enumeration so we must handle separately
+sub gettype { # type of title
+	my ($self) = @_;
+	my @possiblevalues = qw(main subtitle parttitle alternate abbrev other);
+	my $attr = $self->{node}->getAttributeNode("type");
+	$self->{"type"} = $attr ? $attr->getValue : "";
+	if ($self->{type} && grep !/$self->{type}/, "@possiblevalues") {
+		croak "Illegal value ".$self->{type}." for attribute type";
+	}
+	return $self->{type};
 }
 
 #
@@ -612,8 +651,8 @@ sub _init {
 # this attribute has a default so we have to handle it separately
 sub gettobjecttype {
 	my ($self) = @_;
-	$self->{"tobjecttype"} = $self->{node}->getAttributeNode("tobject.type")->getValue
-		|| "news";
+	my $attr = $self->{node}->getAttributeNode("tobject.type");
+	$self->{"tobjecttype"} = $attr ? $attr->getValue : "news";
 }
 
 #
@@ -633,8 +672,8 @@ sub _init {
 # this attribute has a default so we have to handle it separately
 sub gettobjectpropertytype {
 	my ($self) = @_;
-	$self->{"tobjectpropertytype"} = $self->{node}->getAttributeNode("tobject.property.type")->getValue
-		|| "current";
+	my $attr = $self->{node}->getAttributeNode("tobject.property.type");
+	$self->{"tobjectpropertytype"} = $attr ? $attr->getValue : "current";
 }
 
 #
@@ -664,8 +703,8 @@ sub _init {
 # this attribute has a default so we have to handle it separately
 sub gettobjectsubjectipr {
 	my ($self) = @_;
-	$self->{"tobjectsubjectipr"} = $self->{node}->getAttributeNode("tobject.subject.ipr")->getValue
-		|| "IPTC";
+	my $attr = $self->{node}->getAttributeNode("tobject.subject.ipr");
+	$self->{"tobjectsubjectipr"} = $attr ? $attr->getValue : "IPTC";
 }
 
 #
@@ -900,15 +939,15 @@ sub _init {
 # this attribute has a default so we have to handle it separately
 sub getseriespart { # number of this article in the series
 	my ($self) = @_;
-	$self->{"seriespart"} = $self->{node}->getAttributeNode("series.part")->getValue
-		|| "0";
+	my $attr = $self->{node}->getAttributeNode("series.part");
+	$self->{"seriespart"} = $attr ? $attr->getValue : "0";
 }
 
 # this attribute has a default so we have to handle it separately
 sub getseriestotalpart { # expected number of articles in series (0 = unknown/infinite)
 	my ($self) = @_;
-	$self->{"seriestotalpart"} = $self->{node}->getAttributeNode("series.totalpart")->getValue
-		|| "0";
+	my $attr = $self->{node}->getAttributeNode("series.totalpart");
+	$self->{"seriestotalpart"} = $attr ? $attr->getValue : "0";
 }
 
 #
@@ -1056,22 +1095,24 @@ sub _init {
 sub gettype { # transport medium
 	my ($self) = @_;
 	my @possiblevalues = qw(print audio video web appliance other);
-	$self->{"type"} = $self->{node}->getAttributeNode("series.totalpart")->getValue;
-	if ($self->{type} && grep !/^$self->{type}$/, @possiblevalues) {
+	my $attr = $self->{node}->getAttributeNode("type");
+	$self->{"type"} = $attr ? $attr->getValue : "";
+	if ($self->{type} && grep !/$self->{type}/, "@possiblevalues") {
 		croak "Illegal value ".$self->{type}." for attribute type";
 	}
-	$self->{type};
+	return $self->{type};
 }
 
 # attribute is an enumeration so we must handle separately
 sub getunitofmeasure { # measure associated with item-length
 	my ($self) = @_;
 	my @possiblevalues = qw(word character byte inch pica cm hour minute second other);
-	$self->{"unit-of-measure"} = $self->{node}->getAttributeNode("unit-of-measure")->getValue;
-	if ($self->{"unit-of-measure"} && grep !/^$self->{"unit-of-measure"}$/, @possiblevalues) {
+	my $attr = $self->{node}->getAttributeNode("unit-of-measure");
+	$self->{"unit-of-measure"} = $attr ? $attr->getValue : "";
+	if ($self->{"unit-of-measure"} && grep !/$self->{"unit-of-measure"}/, "@possiblevalues") {
 		croak "Illegal value ".$self->{"unit-of-measure"}." for attribute unit-of-measure";
 	}
-	$self->{type};
+	return $self->{"unit-of-measure"};
 }
 
 #
@@ -1093,11 +1134,12 @@ sub _init {
 sub getfunction { # function of person named in "name"
 	my ($self) = @_;
 	my @possiblevalues = qw( writer-author editor producer archivist videographer graphic-artist photographer statistician other);
-	$self->{"function"} = $self->{node}->getAttributeNode("function")->getValue;
-	if ($self->{function} && grep !/^$self->{function}$/, @possiblevalues) {
+	my $attr = $self->{"function"} = $self->{node}->getAttributeNode("function")->getValue;
+	$self->{"function"} = $attr ? $attr->getValue : "";
+	if ($self->{function} && grep !/$self->{function}/, "@possiblevalues") {
 		croak "Illegal value ".$self->{function}." for attribute function";
 	}
-	$self->{type};
+	return $self->{function};
 }
 
 ### END OF "head" ELEMENTS ###
@@ -1192,20 +1234,26 @@ sub _init {
 sub getnoteclass { # category of note
 	my ($self) = @_;
 	my @possiblevalues = qw( cpyrt end hd editorsnote trademk undef );
-	$self->{"noteclass"} = $self->{node}->getAttributeNode("noteclass")->getValue;
-	if ($self->{noteclass} && grep !/^$self->{noteclass}$/, @possiblevalues) {
+	my $attr = $self->{node}->getAttributeNode("noteclass");
+	return "" unless $attr;
+	$self->{"noteclass"} = $attr->getValue;
+	if ($self->{noteclass} && grep !/$self->{noteclass}/, "@possiblevalues") {
 		croak "Illegal value ".$self->{noteclass}." for attribute noteclass";
 	}
+	return $self->{"noteclass"};
 }
 
 # attribute is an enumeration so we must handle separately
 sub gettype { # one of standards, publishable advisory, non-publishable advisory
 	my ($self) = @_;
 	my @possiblevalues = qw( std pa npa );
-	$self->{"type"} = $self->{node}->getAttributeNode("type")->getValue;
-	if ($self->{type} && grep !/^$self->{type}$/, @possiblevalues) {
+	my $attr = $self->{node}->getAttributeNode("type");
+	return "" unless $attr;
+	$self->{"type"} = $attr->getValue;
+	if ($self->{type} && grep !/$self->{type}/, "@possiblevalues") {
 		croak "Illegal value ".$self->{type}." for attribute type";
 	}
+	return $self->{"type"};
 }
 
 #
@@ -1571,10 +1619,12 @@ sub _init {
 sub getmediatype {
 	my ($self) = @_;
 	my @possiblevalues = qw( text audio image video data application other );
-	$self->{"media-type"} = $self->{node}->getAttributeNode("media-type")->getValue;
-	if ($self->{"media-type"} && grep !/^$self->{"media-type"}$/, @possiblevalues) {
+	my $attr = $self->{node}->getAttributeNode("media-type");
+	$self->{"media-type"} = $attr ? $attr->getValue : "";
+	if ($self->{"media-type"} && (grep !/$self->{"media-type"}/, "@possiblevalues")) {
 		croak "Illegal value ".$self->{"media-type"}." for attribute media-type";
 	}
+	return $self->{"media-type"};
 }
 
 #
@@ -1843,10 +1893,12 @@ sub _init {
 sub getalign {
 	my ($self) = @_;
 	my @possiblevalues = qw( left center right justify char );
-	$self->{"align"} = $self->{node}->getAttributeNode("align")->getValue;
-	if ($self->{align} && grep !/^$self->{align}$/, @possiblevalues) {
+	my $attr = $self->{node}->getAttributeNode("align");
+	$self->{"align"} = $attr ? $attr->getValue : "";
+	if ($self->{align} && grep !/$self->{align}/, "@possiblevalues") {
 		croak "Illegal value ".$self->{align}." for attribute align";
 	}
+	return $self->{"align"};
 }
 
 #
@@ -1865,10 +1917,12 @@ sub _init {
 sub getvalign {
 	my ($self) = @_;
 	my @possiblevalues = qw( top middle bottom baseline );
-	$self->{"valign"} = $self->{node}->getAttributeNode("valign")->getValue;
-	if ($self->{valign} && grep !/^$self->{valign}$/, @possiblevalues) {
+	my $attr = $self->{node}->getAttributeNode("valign");
+	$self->{"valign"} = $attr ? $attr->getValue : "";
+	if ($self->{valign} && grep !/$self->{valign}/, "@possiblevalues") {
 		croak "Illegal value ".$self->{valign}." for attribute valign";
 	}
+	return $self->{"valign"};
 }
 
 #
@@ -1887,10 +1941,12 @@ sub _init {
 sub getalign {
 	my ($self) = @_;
 	my @possiblevalues = qw( top bottom left right );
-	$self->{"align"} = $self->{node}->getAttributeNode("align")->getValue;
-	if ($self->{align} && grep !/^$self->{align}$/, @possiblevalues) {
+	my $attr = $self->{node}->getAttributeNode("align");
+	$self->{"align"} = $attr ? $attr->getValue : "";
+	if ($self->{align} && grep !/$self->{align}/, "@possiblevalues") {
 		croak "Illegal value ".$self->{align}." for attribute align";
 	}
+	return $self->{"align"};
 }
 
 #
@@ -1906,6 +1962,7 @@ sub _init {
 	$self->{_attributes}->{width} = IMPLIED; # width of column in pixels
 }
 
+# default value of 1
 sub getspan {
     my ($self) = @_;
     my $attr = $self->{span}->getAttributeNode("span");
@@ -1989,26 +2046,26 @@ sub _init {
 	$self->{_attributes}->{colspan} = IMPLIED; # Number of vertical columns to span
 }
 
-# hmm this is actually supposed to be "if this attr exists, the value must be "nowrap"
-# which isn't quite what this code does
+# the rule here is "if this attr exists, the value must be "nowrap"
 sub getnowrap {
     my ($self) = @_;
     my $attr = $self->{node}->getAttributeNode("nowrap");
-    $self->{"nowrap"} = $attr ? $attr->getValue : 'nowrap';
+    croak "Illegal value for attribute nowrap" if ($attr && $attr->getValue ne "nowrap");
+    $self->{"nowrap"} = $attr ? $attr->getValue : undef;
 }
 
 # handle default value
 sub getrowspan {
     my ($self) = @_;
     my $attr = $self->{node}->getAttributeNode("rowspan");
-    $self->{"rowspan"} = $attr ? $attr->getValue : '1';
+    $self->{"rowspan"} = $attr ? $attr->getValue : "1";
 }
 
 # handle default value
 sub getcolspan {
     my ($self) = @_;
     my $attr = $self->{node}->getAttributeNode("colspan");
-    $self->{"colspan"} = $attr ? $attr->getValue : '1';
+    $self->{"colspan"} = $attr ? $attr->getValue : "1";
 }
 
 #
@@ -2027,26 +2084,26 @@ sub _init {
 	$self->{_attributes}->{colspan} = IMPLIED; # Number of vertical columns to span
 }
 
-# hmm this is actually supposed to be "if this attr exists, the value must be "nowrap"
-# which isn't quite what this code does
+# the rule here is "if this attr exists, the value must be "nowrap"
 sub getnowrap {
     my ($self) = @_;
     my $attr = $self->{node}->getAttributeNode("nowrap");
-    $self->{"nowrap"} = $attr ? $attr->getValue : 'nowrap';
+    croak "Illegal value for attribute nowrap" if ($attr && $attr->getValue ne "nowrap");
+    $self->{"nowrap"} = $attr ? $attr->getValue : undef;
 }
 
 # handle default value
 sub getrowspan {
     my ($self) = @_;
     my $attr = $self->{node}->getAttributeNode("rowspan");
-    $self->{"rowspan"} = $attr ? $attr->getValue : '1';
+    $self->{"rowspan"} = $attr ? $attr->getValue : "1";
 }
 
 # handle default value
 sub getcolspan {
     my ($self) = @_;
     my $attr = $self->{node}->getAttributeNode("colspan");
-    $self->{"colspan"} = $attr ? $attr->getValue : '1';
+    $self->{"colspan"} = $attr ? $attr->getValue : "1";
 }
 
 ### Text elements ###
@@ -2629,10 +2686,12 @@ sub _init {
 sub gettype {
 	my ($self) = @_;
 	my @possiblevalues = qw( std pa npa ); # standard, publishable advisory, non-publishable advisory
-	$self->{"type"} = $self->{node}->getAttributeNode("type")->getValue;
-	if ($self->{type} && grep !/^$self->{type}$/, @possiblevalues) {
+	my $attr = $self->{node}->getAttributeNode("type");
+	$self->{"type"} = $attr ? $attr->getValue : "";
+	if ($self->{type} && grep !/$self->{type}/, "@possiblevalues") {
 		croak "Illegal value ".$self->{type}." for attribute type";
 	}
+	return $self->{"type"};
 }
 
 #
@@ -2680,6 +2739,48 @@ sub _init {
 	$self->{_singleElements}->{"custom-table"} = OPTIONAL;
 	$self->{_realname}->{tablereference} = "table-reference";
 	$self->{_multiElements}->{"table-reference"} = ZEROORMORE;
+}
+
+# return how many columns this table contains. Try a number of methods to work it out.
+sub getColumnCount {
+	my ($self) = @_;
+	# if the column count is given in the metadata, let's believe it
+	my $count = 0;
+	$count = $self->getnitftablemetadata->getcolumncount;
+	if (!$count) {
+		foreach my $coltag ($self->getnitftablemetadata->{node}->getElementsByTagName("nitf-col", 0)) {
+			$count += $coltag->getAttributeNode("occurrences")
+				? $coltag->getAttributeNode("occurrences")->getValue
+				: 1;
+		}
+		foreach my $colgrouptag ($self->getnitftablemetadata->{node}->getElementsByTagName("nitf-colgroup", 0)) {
+			my $occurrences = $colgrouptag->getAttributeNode("occurrences")->getValue
+				if $colgrouptag->getAttributeNode("occurrences");
+			my $subcount = 0;
+			foreach my $coltag ($colgrouptag->getElementsByTagName("nitf-col", 0)) {
+				$subcount += $coltag->getAttributeNode("occurrences")
+					? $coltag->getAttributeNode("occurrences")->getValue
+					: 1;
+			}
+			$count += $subcount * $occurrences;
+		}
+	}
+	return $count;
+}
+
+# return how many rows this table contains. Try a number of methods to work it out.
+sub getRowCount {
+	my ($self) = @_;
+	# if the rows count is given in the metadata, let's believe it
+	my $count = 0;
+	$count = $self->getnitftablemetadata->getrowcount;
+	# otherwise do a simple count of all the <tr> elements in the main table
+	if (!$count) {
+		foreach my $rowtag ($self->gettable->{node}->getElementsByTagName("tr", 0)) {
+			$count += 1;
+		}
+	}
+	return $count;
 }
 
 #
@@ -2735,10 +2836,12 @@ sub _init {
 sub getstatus {
 	my ($self) = @_;
 	my @possiblevalues = qw( pre snap-shot interim final official );
-	$self->{"status"} = $self->{node}->getAttributeNode("status")->getValue;
-	if ($self->{status} && grep !/^$self->{status}$/, @possiblevalues) {
+	my $attr = $self->{node}->getAttributeNode("status");
+	$self->{"status"} = $attr ? $attr->getValue : "";
+	if ($self->{status} && grep !/$self->{status}/, "@possiblevalues") {
 		croak "Illegal value ".$self->{status}." for attribute status";
 	}
+	return $self->{"status"};
 }
 
 #
@@ -2790,9 +2893,11 @@ sub _init {
 sub getdatatype {
 	my ($self) = @_;
 	my @possiblevalues = qw( text number graphic other );
-	$self->{"data-type"} = $self->{node}->getAttributeNode("data-type")->getValue;
-	if ($self->{"data-type"} && grep !/^$self->{"data-type"}$/, @possiblevalues) {
+	my $attr = $self->{node}->getAttributeNode("data-type");
+	$self->{"data-type"} = $attr ? $attr->getValue : "";
+	if ($self->{"data-type"} && grep !/$self->{"data-type"}/, "@possiblevalues") {
 		croak "Illegal value ".$self->{"data-type"}." for attribute data-type";
 	}
+	return $self->{"data-type"};
 }
 

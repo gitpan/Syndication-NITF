@@ -14,28 +14,26 @@ Syndication::NITF -- a NITF v3.0 library for Perl
     http://www.iptc.org/
 
 LATEST VERSION AND WHAT'S NEW
-    The latest version is 0.01, released 1 November 2001.
+    The latest version is 0.02, released 19 December 2001.
 
     Download: http://www.cpan.org/authors/id/B/BQ/BQUINN/
 
-  What's New in 0.01:
+  What's New in 0.02:
 
-    *   Everything
+    *   Example Parser
 
-        This is still very basic. It really just traverses NITF documents,
-        giving users a few helper functions. Future releases will include
-        many methods to handle NITF tables, organisation and currency tags,
-        etc.
+        Simple example parser added that outputs information about an NITF
+        file, handling most types of tag.
 
     See the Changes file for previous releases.
 
 INSTALLING Syndication::NITF
-    The lazy way to install Syndication::NITF:
+    The simple way to install Syndication::NITF:
 
        $ perl -MCPAN -e shell
        cpan> install Syndication::NITF
 
-    Or the normal way:
+    Or you can do it by hand
 
     Retrieve the latest copy from CPAN:
     http://www.cpan.org/authors/id/B/BQ/BQUINN/
@@ -113,7 +111,7 @@ AUTHOR AND COPYRIGHT
     This module is free software. It may be used, redistributed and/or
     modified under the same terms as Perl itself.
 
-    $Id: README.pod,v 0.1 2001/11/01 06:12:46 brendan Exp $
+    $Id: README.pod,v 0.2 2001/12/19 05:27:20 brendan Exp $
 
     ** This file was automatically generated from **
     ** doc/README.pod. To edit it, see there.    **

@@ -1,4 +1,4 @@
-$Id: Changes.pod,v 0.1 2001/11/01 06:13:12 brendan Exp $
+$Id: Changes.pod,v 0.2 2001/12/19 05:27:20 brendan Exp $
 =for html
 <div id="content">
 <H1>
@@ -12,6 +12,13 @@ Revision history for Syndication::NITF
 Revision history for Syndication::NITF
 
 =end text
+
+=head2 v0.01 - Released to CPAN 12 Dec 2001
+
+- Debugged in much more depth...
+
+- added examples/NITFParser.pl, sample program that parses and outputs
+ info describing an NITF file. Doesn't do much more right now.
 
 =head2 v0.01 - Released to CPAN 1 Nov 2001
 

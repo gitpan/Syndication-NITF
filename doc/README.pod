@@ -1,4 +1,4 @@
-$Id: README.pod,v 0.1 2001/11/01 06:12:46 brendan Exp $
+$Id: README.pod,v 0.2 2001/12/19 05:27:20 brendan Exp $
 
 =for html 
 <div id="content">
@@ -19,8 +19,8 @@ NITF is a standard format for the markup of textual news content (eg newspaper a
 magazine articles), ratified by the International Press Telecommunications
 Council (http://www.iptc.org). 
 
-This module supports the version 3.0 DTD of NITF. It makes no attempt to support eariler versions
-of the DTD.
+This module supports the version 3.0 DTD of NITF. It makes no attempt to support
+eariler versions of the DTD.
 
 =over 4
 
@@ -32,21 +32,20 @@ or B<http://www.iptc.org/>
 
 =head1 LATEST VERSION AND WHAT'S NEW
 
-The latest version is 0.01, released 1 November 2001.
+The latest version is 0.02, released 19 December 2001.
 
 Download: http://www.cpan.org/authors/id/B/BQ/BQUINN/
 
-=head2 What's New in 0.01:
+=head2 What's New in 0.02:
 
 =over 4
 
 =item *
 
-B<Everything>
+B<Example Parser>
 
-This is still very basic. It really just traverses NITF documents, giving
-users a few helper functions. Future releases will include many methods to
-handle NITF tables, organisation and currency tags, etc.
+Simple example parser added that outputs information about
+an NITF file, handling most types of tag.
 
 =back
 
@@ -58,12 +57,12 @@ See the Changes file for previous releases.
 
 =head1 INSTALLING Syndication::NITF
 
-The lazy way to install Syndication::NITF:
+The simple way to install Syndication::NITF:
 
    $ perl -MCPAN -e shell
    cpan> install Syndication::NITF
 
-Or the normal way:
+Or you can do it by hand
 
 Retrieve the latest copy from CPAN: http://www.cpan.org/authors/id/B/BQ/BQUINN/
 
@@ -98,8 +97,9 @@ or if you just 'install Syndication::NITF' the CPAN module should automagically 
 
 =head2 What Systems Does It Work With?
 
-Syndication::NITF B<should> work on any machine that supports XML::DOM, and any filesystem including Windows,
-although I haven't tested it on Windows yet. It's still early days, so expect some bugs.
+Syndication::NITF B<should> work on any machine that supports XML::DOM, and any filesystem
+including Windows, although I haven't tested it on Windows yet. It's still early days, so
+expect some bugs.
 
 =head1 WHERE ARE THE MANUALS?
 
@@ -153,7 +153,7 @@ All rights reserved.
 This module is free software. It may be used, redistributed
 and/or modified under the same terms as Perl itself.
 
-$Id: README.pod,v 0.1 2001/11/01 06:12:46 brendan Exp $
+$Id: README.pod,v 0.2 2001/12/19 05:27:20 brendan Exp $
 
 =cut
 
